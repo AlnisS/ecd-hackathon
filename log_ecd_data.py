@@ -97,7 +97,7 @@ while keep_running:
       # print(a3_temperature)
 
       # print(f'{a0_pressure:6.1f},{a1_pressure:6.1f},{a2_temperature:4.2f},{a3_temperature:4.2f}')
-      csvline = f'{a0_pressure:6.2f}, {a1_pressure:6.2f}, {a2_temperature:5.2f}, {a3_temperature:5.2f}\n'
+      csvline = f'{sample_time_start}, {a0_pressure:6.2f}, {a1_pressure:6.2f}, {a2_temperature:5.2f}, {a3_temperature:5.2f}\n'
       print(csvline, end='')
 
 
