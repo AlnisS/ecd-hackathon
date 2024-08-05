@@ -27,7 +27,9 @@ backup_filepath = f'data/backup/{timestamp}.txt'
 backup_output_file = open(backup_filepath, 'x')
 print(f'backup log file: {backup_filepath}')
 
-ser = serial.Serial('/dev/cu.usbmodem14201',115200, timeout = 0.1, write_timeout = 0.1)
+# device_name = '/dev/cu.usbmodem14201'
+device_name = '/dev/ttyACM0'
+ser = serial.Serial(device_name, 115200, timeout = 0.1, write_timeout = 0.1)
 
 keep_running = True
 
@@ -37,55 +39,94 @@ lut_temp.reverse()
 lut_R.reverse()
 
 def get_lut_temp(R):
-  np.interp(R, lut_R, lut_temp)
+  return np.interp(R, lut_R, lut_temp)
 
 def v_raw_to_volts(v_raw):
   return v_raw * 3.3 / 65536
 
 # sensed voltage (V) to thermistor resistance (kOhm)
 def sense_V_to_thermistor_R(volts):
-  sense_I = volts / 10000 # current through 10k resistor
-  thermistor_V = 3.3 - volts
+  thermistor_V = volts
+  sense_V = 3.3 - thermistor_V
+  sense_I = sense_V / 10000 # current through 10k resistor
   thermistor_R = thermistor_V / sense_I
   return thermistor_R / 1000
 
+lines_read = 0
+
 while keep_running:
+  time.sleep(0.001)  # prevent spinning through really fast
   try:
     message_flag = False
     line = ''
     while ser.in_waiting > 0:
       line = ser.readline().decode('UTF-8')
-      message_flag = True
+      lines_read += 1
+      if lines_read > 2: # first line is junk
+        message_flag = True
     if message_flag == True:
       backup_output_file.write(line)
       # print(line, end='')
+      # print(line)
       data = ast.literal_eval(line)
       csvline = ','.join(str(f) for f in data)
-      sample_time = data[0]
-      current = data[1]
-      v1_raw = data[2]
-      v2_raw = data[3]
-      v3_raw = data[4]
-      v4_raw = data[5]
 
-      pressure = (current - 4.0) * 1000.0 / 16.0
-      v1_volts = v_raw_to_volts(v1_raw)
-      v2_volts = v_raw_to_volts(v2_raw)
-      v3_volts = v_raw_to_volts(v3_raw)
-      v4_volts = v_raw_to_volts(v4_raw)
+      sample_time_start = data[0]
+      sample_time_end = data[1]
+      a0_V = data[2]
+      a1_V = data[3]
+      a2_V = data[4]
+      a3_V = data[5]
 
-      t1_R = sense_V_to_thermistor_R(v1_volts)
-      t2_R = sense_V_to_thermistor_R(v2_volts)
-      t3_R = sense_V_to_thermistor_R(v3_volts)
-      t4_R = sense_V_to_thermistor_R(v4_volts)
-      # print(v1_volts)
-      print(f'{t1_R:10.5f} {t2_R:10.5f} {t3_R:10.5f} {t4_R:10.5f} {current:5.1f}')
-      t1_C = get_lut_temp(t1_R)
-      t2_C = get_lut_temp(t2_R)
-      t3_C = get_lut_temp(t3_R)
-      t4_C = get_lut_temp(t4_R)
-      # print(v1_volts, t1_R, t1_C)
-      # print(f'{t1_C:10.5f} {t2_C:10.5f} {t3_C:10.5f} {t4_C:10.5f}')
+      pressure_sense_R = 49.9  # ohms
+      a0_I = a0_V / pressure_sense_R * 1000.0  # milliamps
+      a1_I = a1_V / pressure_sense_R * 1000.0  # milliamps
+      a0_pressure = (a0_I - 4.0) * 1000.0 / 16.0
+      a1_pressure = (a1_I - 4.0) * 1000.0 / 16.0
+      
+      a2_R = sense_V_to_thermistor_R(a2_V)
+      a3_R = sense_V_to_thermistor_R(a3_V)
+      a2_temperature = get_lut_temp(a2_R)
+      a3_temperature = get_lut_temp(a3_R)
+
+      # print(a0_pressure)
+      # print(a1_pressure)
+      # print(a2_V)
+      # print(a3_V)
+      # print(a2_temperature)
+      # print(a3_temperature)
+
+      # print(f'{a0_pressure:6.1f},{a1_pressure:6.1f},{a2_temperature:4.2f},{a3_temperature:4.2f}')
+      csvline = f'{a0_pressure:6.2f}, {a1_pressure:6.2f}, {a2_temperature:5.2f}, {a3_temperature:5.2f}\n'
+      print(csvline, end='')
+
+
+
+    #   sample_time = data[0]
+    #   current = data[1]
+    #   v1_raw = data[2]
+    #   v2_raw = data[3]
+    #   v3_raw = data[4]
+    #   v4_raw = data[5]
+
+    #   pressure = (current - 4.0) * 1000.0 / 16.0
+    #   v1_volts = v_raw_to_volts(v1_raw)
+    #   v2_volts = v_raw_to_volts(v2_raw)
+    #   v3_volts = v_raw_to_volts(v3_raw)
+    #   v4_volts = v_raw_to_volts(v4_raw)
+
+    #   t1_R = sense_V_to_thermistor_R(v1_volts)
+    #   t2_R = sense_V_to_thermistor_R(v2_volts)
+    #   t3_R = sense_V_to_thermistor_R(v3_volts)
+    #   t4_R = sense_V_to_thermistor_R(v4_volts)
+    #   # print(v1_volts)
+    #   print(f'{t1_R:10.5f} {t2_R:10.5f} {t3_R:10.5f} {t4_R:10.5f} {current:5.1f}')
+    #   t1_C = get_lut_temp(t1_R)
+    #   t2_C = get_lut_temp(t2_R)
+    #   t3_C = get_lut_temp(t3_R)
+    #   t4_C = get_lut_temp(t4_R)
+    #   # print(v1_volts, t1_R, t1_C)
+    #   # print(f'{t1_C:10.5f} {t2_C:10.5f} {t3_C:10.5f} {t4_C:10.5f}')
 
       # print(csvline)
       if write_to_file:
@@ -93,6 +134,9 @@ while keep_running:
       message_flag = False
   except KeyboardInterrupt:
     keep_running = False
+  # except Exception as e:
+  #   print(f'error, but continuing: {e}')
+    
 
 print()
 
